@@ -1,0 +1,36 @@
+name: Reservation tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  reservations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: postgres:17
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: paws_match_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ci_only_password
+      PGDATABASE: paws_match_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build schema and test reservations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in database/build_demo.sql database/migrations/012_bewerbungsprozess.sql database/tests/006_bewerbungsprozess.sql database/migrations/013_reservierungen.sql database/tests/007_reservierungen.sql database/tests/004_erweiterte_demo.sql; do
+            psql -X -v ON_ERROR_STOP=1 -f "$file"
+          done
+      - name: Two concurrent reservation attempts
+        run: bash database/tests/reservation_concurrency.sh
