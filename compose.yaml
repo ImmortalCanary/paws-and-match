@@ -1,0 +1,21 @@
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: paws_match
+      POSTGRES_USER: paws_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Bitte POSTGRES_PASSWORD in .env setzen}
+    ports:
+      - "127.0.0.1:5433:5432"
+    volumes:
+      - paws_data:/var/lib/postgresql/data
+      - ./database/001_schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+      - ./database/002_demo_data.sql:/docker-entrypoint-initdb.d/002_demo_data.sql:ro
+      - ./database:/workspace/database:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paws_user -d paws_match"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+volumes:
+  paws_data:
