@@ -1,0 +1,4 @@
+interessent_id,vorname,tier_id,tiername,ergebnis,kinder_ok,katzen_ok,treppen_ok,allein_ok
+1,Anna,1,Balu,ausgeschlossen,t,f,f,f
+1,Anna,2,Luna,grundsaetzlich passend,t,t,t,t
+1,Anna,3,Milo,manuell pruefen,,t,t,t

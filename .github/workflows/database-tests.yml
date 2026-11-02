@@ -1,0 +1,44 @@
+name: Database tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: paws_match_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ci_only_password
+      PGDATABASE: paws_match_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Create schema
+        run: psql -X -v ON_ERROR_STOP=1 -f database/001_schema.sql
+      - name: Load demo data
+        run: psql -X -v ON_ERROR_STOP=1 -f database/002_demo_data.sql
+      - name: Test data and constraints
+        run: psql -X -v ON_ERROR_STOP=1 -f database/tests/001_tests.sql
+      - name: Compare actual matching results
+        run: |
+          set -euo pipefail
+          psql -X --csv -v ON_ERROR_STOP=1 -f database/003_matching.sql > "$RUNNER_TEMP/actual_matching.csv"
+          cat "$RUNNER_TEMP/actual_matching.csv"
+          diff -u database/tests/expected_matching.csv "$RUNNER_TEMP/actual_matching.csv"
