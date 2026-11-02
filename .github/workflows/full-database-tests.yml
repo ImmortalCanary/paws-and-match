@@ -1,0 +1,51 @@
+name: Full database tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  full-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: postgres:17
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: paws_match_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ci_only_password
+      PGDATABASE: paws_match_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build complete study prototype and run tests
+        run: psql -X -v ON_ERROR_STOP=1 -f database/build_demo.sql
+      - name: Export and restore in a second empty database
+        shell: bash
+        run: |
+          set -euo pipefail
+          pg_dump --no-owner --no-privileges --file="$RUNNER_TEMP/paws_demo.sql"
+          createdb paws_match_restore
+          psql -X -v ON_ERROR_STOP=1 -d paws_match_restore -f "$RUNNER_TEMP/paws_demo.sql"
+          psql -X -v ON_ERROR_STOP=1 -d paws_match_restore -f database/tests/004_erweiterte_demo.sql
+          psql -X -v ON_ERROR_STOP=1 -d paws_match_restore -f database/tests/005_organisationen.sql
+          psql -X -v ON_ERROR_STOP=1 -d paws_match_restore -f database/tests/002_matching_v2.sql
+          psql -X -v ON_ERROR_STOP=1 -d paws_match_restore -f database/tests/003_medizinische_merkmale.sql
+      - name: Compare restored matching and sites with original database
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql -X --csv -v ON_ERROR_STOP=1 -c 'SELECT * FROM matching_v2 ORDER BY interessent_id, tier_id' > "$RUNNER_TEMP/original_matching.csv"
+          psql -X --csv -v ON_ERROR_STOP=1 -d paws_match_restore -c 'SELECT * FROM matching_v2 ORDER BY interessent_id, tier_id' > "$RUNNER_TEMP/restored_matching.csv"
+          diff -u "$RUNNER_TEMP/original_matching.csv" "$RUNNER_TEMP/restored_matching.csv"
+          psql -X --csv -v ON_ERROR_STOP=1 -c 'SELECT * FROM standort_uebersicht ORDER BY tierheim_id' > "$RUNNER_TEMP/original_sites.csv"
+          psql -X --csv -v ON_ERROR_STOP=1 -d paws_match_restore -c 'SELECT * FROM standort_uebersicht ORDER BY tierheim_id' > "$RUNNER_TEMP/restored_sites.csv"
+          diff -u "$RUNNER_TEMP/original_sites.csv" "$RUNNER_TEMP/restored_sites.csv"
