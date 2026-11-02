@@ -1,0 +1,35 @@
+name: Application process tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  applications:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    container: postgres:17
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: paws_match_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: postgres
+      PGUSER: postgres
+      PGPASSWORD: ci_only_password
+      PGDATABASE: paws_match_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build existing complete demo
+        run: psql -X -v ON_ERROR_STOP=1 -f database/build_demo.sql
+      - name: Apply application process migration
+        run: psql -X -v ON_ERROR_STOP=1 -f database/migrations/012_bewerbungsprozess.sql
+      - name: Test transitions and repeated applications
+        run: psql -X -v ON_ERROR_STOP=1 -f database/tests/006_bewerbungsprozess.sql
+      - name: Verify demo and matching remain intact
+        run: psql -X -v ON_ERROR_STOP=1 -f database/tests/004_erweiterte_demo.sql
