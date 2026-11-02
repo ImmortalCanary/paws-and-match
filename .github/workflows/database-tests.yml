@@ -42,3 +42,21 @@ jobs:
           psql -X --csv -v ON_ERROR_STOP=1 -f database/003_matching.sql > "$RUNNER_TEMP/actual_matching.csv"
           cat "$RUNNER_TEMP/actual_matching.csv"
           diff -u database/tests/expected_matching.csv "$RUNNER_TEMP/actual_matching.csv"
+      - name: Execute reporting queries
+        run: psql -X -v ON_ERROR_STOP=1 -f database/004_auswertungen.sql
+      - name: Verify application demo output and rollback
+        run: |
+          set -euo pipefail
+          psql -X -q --csv -v ON_ERROR_STOP=1 -f database/005_bewerbung_demo.sql > "$RUNNER_TEMP/application_demo.csv"
+          cat "$RUNNER_TEMP/application_demo.csv"
+          test "$(wc -l < "$RUNNER_TEMP/application_demo.csv" | tr -d ' ')" = "2"
+          test "$(head -n 1 "$RUNNER_TEMP/application_demo.csv")" = "bewerbung_id,tiername,vorname,status"
+          grep -Eq '^[0-9]+,Luna,Anna,in_pruefung$' "$RUNNER_TEMP/application_demo.csv"
+          test "$(psql -X -At -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM bewerbung;')" = "0"
+      - name: Verify demo data after rollback
+        run: psql -X -v ON_ERROR_STOP=1 -f database/tests/001_tests.sql
+      - name: Recheck matching after application demo
+        run: |
+          set -euo pipefail
+          psql -X --csv -v ON_ERROR_STOP=1 -f database/003_matching.sql > "$RUNNER_TEMP/matching_after_demo.csv"
+          diff -u database/tests/expected_matching.csv "$RUNNER_TEMP/matching_after_demo.csv"
