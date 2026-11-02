@@ -1,0 +1,37 @@
+name: Organisation tests
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  organisations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: paws_match_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ci_only_password
+      PGDATABASE: paws_match_test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Build and test organisation demo
+        run: |
+          set -euo pipefail
+          for file in database/001_schema.sql database/002_demo_data.sql database/migrations/006_matching_v2.sql database/migrations/007_medizinische_merkmale.sql database/seeds/008_erweiterte_demo.sql database/migrations/010_organisationen.sql database/seeds/011_organisationen_demo.sql database/tests/005_organisationen.sql database/tests/004_erweiterte_demo.sql; do
+            psql -X -v ON_ERROR_STOP=1 -f "$file"
+          done
