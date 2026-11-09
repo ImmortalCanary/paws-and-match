@@ -1,0 +1,54 @@
+name: JDBC exercise
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  jdbc:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: ci_only_password
+          POSTGRES_DB: paws_match_jdbc
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: ci_only_password
+      PGDATABASE: paws_match_jdbc
+      DB_URL: jdbc:postgresql://localhost:5432/paws_match_jdbc
+      DB_USER: postgres
+      DB_PASSWORD: ci_only_password
+      JDBC_INTEGRATION_TEST: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Build existing Paws and Match database
+        run: psql -X -v ON_ERROR_STOP=1 -f database/build_demo.sql
+      - name: Compile, integration-test and package Java exercise
+        run: mvn --batch-mode --no-transfer-progress -f jdbc-uebung/pom.xml clean verify
+      - name: Run packaged exercise against PostgreSQL
+        run: java -jar jdbc-uebung/target/paws-match-jdbc.jar
+      - name: Verify original demo remains intact
+        run: psql -X -v ON_ERROR_STOP=1 -f database/tests/004_erweiterte_demo.sql
+      - name: Provide runnable JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: paws-match-jdbc
+          path: jdbc-uebung/target/paws-match-jdbc.jar
+          if-no-files-found: error
+          retention-days: 7
